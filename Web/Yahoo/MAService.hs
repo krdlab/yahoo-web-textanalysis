@@ -14,7 +14,7 @@ module Web.Yahoo.MAService
     , parseResultSet    -- XXX
     ) where
 
-import Data.Monoid (mappend)
+import           Data.Monoid            (mappend)
 import           Control.Applicative    ((<$>))
 import qualified Data.Conduit           as C
 import qualified Network.HTTP.Conduit   as HC
@@ -22,8 +22,8 @@ import           Data.ByteString        (ByteString)
 import           Data.ByteString.Char8  ()
 import           Data.Text              (Text, unpack)
 import qualified Data.Text.Encoding     as TE
-import Data.XML.Types as XT
-import Text.XML.Stream.Parse
+import qualified Data.XML.Types         as XT
+import           Text.XML.Stream.Parse
 
 data Params = Params
     { appId :: ByteString
@@ -78,7 +78,7 @@ parseResultSet = tagName (nsName "ResultSet") ignoreAttrs $ \_ -> do
     uniqResult' <- parseResult $ nsName "uniq_result"
     return $ ResultSet maResult' uniqResult'
     where
-        nsName ln = Name ln (Just "urn:yahoo:jp:jlp") Nothing
+        nsName ln = XT.Name ln (Just "urn:yahoo:jp:jlp") Nothing
 
         parseResult tname = tagNoAttr tname $ do
             totalCount'    <- tagNoAttr (nsName "total_count") content
