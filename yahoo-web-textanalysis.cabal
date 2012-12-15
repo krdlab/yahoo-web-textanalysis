@@ -62,5 +62,9 @@ library
                      , transformers >=0.3
                      , conduit      >=0.5
                      , http-conduit >=1.8
+                     , http-types
                      , xml-conduit  >=1.0
                      , xml-types    >=0.3
+                     , failure      >=0.2
+                     , resourcet    >=0.4
+                     , monad-control >=0.3
