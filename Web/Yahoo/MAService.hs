@@ -5,74 +5,63 @@
 {-# OPTIONS_GHC -Wall #-}
 module Web.Yahoo.MAService
     ( Params(..)
+    , PartOfSpeech(..)
+    , AnalysisResultType(..)
+    , ResponseElement(..)
+    , defaultRequestParams
     , ResultSet(..)
     , Result(..)
     , MAResult
     , UniqResult
     , Word(..)
     , parse
-    , parseResultSet    -- XXX
+    , buildRequest
+    , parseResultSet
     ) where
 
-import           Data.Monoid            (mappend)
-import           Control.Applicative    ((<$>))
-import qualified Data.Conduit           as C
-import qualified Network.HTTP.Conduit   as HC
-import           Data.ByteString        (ByteString)
-import           Data.ByteString.Char8  ()
-import           Data.Text              (Text, unpack)
-import qualified Data.Text.Encoding     as TE
-import qualified Data.XML.Types         as XT
+import           Control.Applicative          ((<$>))
+import           Control.Monad.IO.Class       (MonadIO)
+import           Control.Monad.Trans.Control  (MonadBaseControl)
+import           Control.Monad.Trans.Resource (MonadThrow, MonadUnsafeIO, MonadResource, ResourceT)
+import           Control.Failure              (Failure)
+import qualified Data.Conduit                 as C
+import qualified Network.HTTP.Conduit         as HC
+import           Data.Text                    (Text, unpack)
+import qualified Data.XML.Types               as XT
 import           Text.XML.Stream.Parse
 
-data Params = Params
-    { appId :: ByteString
-    , results :: ByteString
-    }
-    deriving Show
+import Web.Yahoo.MAService.Types
+import Web.Yahoo.MAService.Internal
 
-data ResultSet = ResultSet
-   { maResult :: Maybe MAResult
-   , uniqResult :: Maybe UniqResult
-   }
-   deriving Show
+endpoint :: String
+endpoint = "http://jlp.yahooapis.jp/MAService/V1/parse"
 
-data Result = Result
-    { totalCount :: Maybe Int
-    , filteredCount :: Maybe Int
-    , wordList :: Maybe [Word]
-    }
-    deriving Show
+parse :: (Failure HC.HttpException m, MonadIO m, MonadThrow m, MonadUnsafeIO m, MonadBaseControl IO m, MonadResource (ResourceT m))
+      => Params
+      -> Text
+      -> m (Maybe ResultSet)
+parse params sentence = do
+    request <- buildRequest params sentence
+    parse' request
 
-data Word = Word
-    { surface :: Maybe Text
-    , reading :: Maybe Text
-    , pos     :: Maybe Text
-    , baseform :: Maybe Text
-    , feature :: Maybe Text
-    , count :: Maybe Int
-    }
-    deriving Show
+parse' :: (Failure HC.HttpException m, MonadIO m, MonadThrow m, MonadUnsafeIO m, MonadBaseControl IO m, MonadResource (ResourceT m))
+       => HC.Request (ResourceT m)
+       -> m (Maybe ResultSet)
+parse' request = HC.withManager $ \manager -> do
+    HC.Response _ _ _ src <- HC.httpLbs request manager
+    parseLBS def src C.$$ parseResultSet
 
-type MAResult   = Result
-type UniqResult = Result
+buildRequest :: (Monad m, Failure HC.HttpException m, Monad m')
+             => Params
+             -> Text
+             -> m (HC.Request m')
+buildRequest params sentence = url endpoint >>= addHeader >>= addBody
+    where
+        url           = HC.parseUrl
+        addHeader req = return $ req { HC.requestHeaders = HC.requestHeaders req ++ pairsOfHeader params }
+        addBody   req = return $ HC.urlEncodedBody (pairsOfBody params sentence) req
 
---parse :: (MonadIO m) => Params -> String -> m ResultSet
-parse :: Params -> Text -> IO (Maybe ResultSet)
-parse ps sentence = do
-    -- Failure HC.HttpException m
-    request'' <- HC.parseUrl "http://jlp.yahooapis.jp/MAService/V1/parse"
-    let request' = request'' { HC.queryString = "appid=" `mappend` appId ps }
-    let request = HC.urlEncodedBody [ ("results", results ps)
-                                    , ("sentence", TE.encodeUtf8 sentence)
-                                    ] request'
-    HC.withManager $ \manager -> do
-        --HC.Response _ _ _ src <- HC.http request manager
-        --src C.$$+- parseBytes def C.$$ parseResultSet
-        HC.Response _ _ _ src <- HC.httpLbs request manager
-        parseLBS def src C.$$ parseResultSet
-
-parseResultSet :: forall o u. C.Pipe XT.Event XT.Event o u (C.ResourceT IO) (Maybe ResultSet)
+parseResultSet :: (MonadResource m) => C.Pipe XT.Event XT.Event o u m (Maybe ResultSet)
 parseResultSet = tagName (nsName "ResultSet") ignoreAttrs $ \_ -> do
     maResult'   <- parseResult $ nsName "ma_result"
     uniqResult' <- parseResult $ nsName "uniq_result"

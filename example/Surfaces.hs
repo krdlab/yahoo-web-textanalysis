@@ -9,11 +9,16 @@ import qualified Web.Yahoo.MAService as MA
 
 main :: IO ()
 main = do
-    resultSet <- MA.parse params "今日も良い天気ですね．"
-    case resultSet >>= MA.maResult >>= MA.wordList of
-        Just wlist -> forM_ (mapMaybe MA.surface wlist) $ putStrLn . unpack
-        Nothing    -> return ()
+    MA.parse params1 "今日は良い天気ですね．" >>= printSurface
+    MA.parse params2 "今日は良い天気ですね．" >>= print
     where
-        params = MA.Params { MA.appId   = "(your Yahoo! App ID)"
-                           , MA.results = "ma"
-                           }
+        params1 = MA.defaultRequestParams { MA.paramAppId    = "(your Yahoo! App ID)"
+                                          , MA.paramResults  = [MA.MA]
+                                          }
+        params2 = MA.defaultRequestParams { MA.paramAppId    = "(your Yahoo! App ID)"
+                                          , MA.paramResults  = [MA.MA]
+                                          , MA.paramResponse = Just [MA.Surface]
+                                          }
+        printSurface rs = case rs >>= MA.maResult >>= MA.wordList of
+                                     Just wlist -> forM_ (mapMaybe MA.surface wlist) $ putStrLn . unpack
+                                     Nothing    -> return ()

@@ -6,9 +6,9 @@ import qualified Web.Yahoo.MAService as MA
 
 main :: IO ()
 main = do
-    resultSet <- MA.parse params "今日も良い天気ですね．"
+    resultSet <- MA.parse params "今日は良い天気ですね．"
     print resultSet
     where
-        params = MA.Params { MA.appId   = "(your Yahoo! App ID)"
-                           , MA.results = "ma,uniq"
-                           }
+        params = MA.defaultRequestParams { MA.paramAppId   = "(your Yahoo! App ID)"
+                                         , MA.paramResults = [MA.MA, MA.Uniq]
+                                         }
